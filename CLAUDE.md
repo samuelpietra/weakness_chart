@@ -106,6 +106,9 @@ Commit only when the maintainer says so, usually after playing the build.
 - `./package.sh` writes the install zip of the tagged release to
   `~/Desktop/weakness_chart-<version>.zip`, leaving out what
   `.gitattributes` marks `export-ignore` (tests and tooling).
-- Players get updates from GitHub releases (`github` in the manifest): a
-  release of tag `v<version>` with that zip attached. A push alone updates no
-  one.
+- Players get updates from GitHub releases (`github` in the manifest).
+  `release.yml` publishes one, zip attached, for each pushed tag; push with
+  `git push --follow-tags`. `ci.yml` fails a pushed commit that does not
+  raise the version or lacks its tag (`.github/scripts/check_versions.sh`).
+- CI runs only the ROM-free tests (`tests/ci.sh`); `tests/run.sh` with the
+  render test stays the local check before every commit.

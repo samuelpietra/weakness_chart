@@ -7,7 +7,13 @@ caught before a build is installed and played. Run them all with:
 tests/run.sh
 ```
 
-They need the gen1recomp install this mod sits in (macOS, portable). `render`
+`tests/ci.sh` runs `lint` and `integration` — the tests that need no ROM — on
+Linux with the system's LÖVE and the engine downloaded from gen1recomp's
+release of the version this mod was validated on. GitHub Actions runs it on
+every push and pull request, and before every release. `render` never runs
+there: a ROM does not leave the player's machine.
+
+`tests/run.sh` needs the gen1recomp install this mod sits in (macOS, portable). `render`
 runs once for each of Emerald, FireRed and LeafGreen whose ROM is imported, and
 says which it skipped. The script extracts the newest engine payload and a copy
 of the app's LÖVE into `$TMPDIR/weakness_chart-tests`.

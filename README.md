@@ -123,7 +123,17 @@ is running.
 Keep `manifest.json`'s `version` field in step with the tag.
 
 A release players can update to is a GitHub release of that tag with the zip
-from `package.sh` attached; pushing a commit updates no one.
+from `package.sh` attached; pushing a commit updates no one. GitHub Actions
+does both checks and the publishing:
+
+| Workflow | When | What |
+|---|---|---|
+| `ci.yml` | every push to `main` and pull request | `tests/ci.sh` (lint and integration); every pushed commit raises the version and carries its tag |
+| `release.yml` | a pushed tag `v*` | the tests again, then a GitHub release of the tag with the zip attached and the commit message as its notes |
+
+Push commits with their tags: `git push --follow-tags`. GitHub sends no tag
+events for a push of more than three tags; release such a push by hand from
+**Actions → Release → Run workflow**, naming the newest tag.
 
 ### Packaging
 
@@ -150,4 +160,5 @@ them `export-ignore`). It stops if that version has no tag yet.
 | `main.lua` | Wiring: the engine hooks, when R opens and closes the chart, the pages. |
 | `lib/chart.lua` | What a page says: the battler's name, level and types, and its matchups, from the engine's own damage calculation. |
 | `lib/layout.lua` | Where everything goes on screen, and the drawing; the pieces that differ between Emerald and FireRed/LeafGreen. |
-| `tests/` | Offline tests, run with `tests/run.sh` (see `tests/README.md`). |
+| `tests/` | Offline tests, run with `tests/run.sh`; `tests/ci.sh` runs the ROM-free ones in CI (see `tests/README.md`). |
+| `.github/` | The CI and release workflows, and the check that every commit is a tagged release. |
