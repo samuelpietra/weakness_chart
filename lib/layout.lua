@@ -1,6 +1,6 @@
 -- The chart window, drawn over the battle with the game's own pieces: the
 -- window frame the player chose in OPTIONS, the text font, the summary
--- screen's move type badges and the list menu's scroll arrows.  A header
+-- screen's type badges and the list menu's scroll arrows.  A header
 -- window names the battler, with its level and types; the window below lists
 -- its matchups, one group per row, five badges to a row, over a footer naming
 -- the buttons.
@@ -21,6 +21,8 @@ return function(Engine)
   local HEADER_Y = 8
   local LEVEL_GAP = 8
 
+  -- Every badge takes a 32x16 slot: Emerald's badges fill it, FireRed's and
+  -- LeafGreen's are 32x12 and sit in its middle.
   local BADGE_W, BADGE_H = 32, 16
   local BADGE_STEP = 34
   local BADGES_PER_ROW = 5
@@ -30,17 +32,6 @@ return function(Engine)
   -- The tightest gap that keeps six rows (Steel/Rock, Electric/Steel) in the window.
   local GROUP_GAP = 1
   local FOOTER_Y = 136
-
-  -- The footer joins the words of two of the game's button hints:
-  -- gText_PickOk ("{DPAD_UPDOWN}PICK {A_BUTTON}OK") and gText_AButtonExit
-  -- ("{A_BUTTON}EXIT"), the exit on R.  The R icon is twice as wide as the A
-  -- one the hints were drawn with, so a space follows each icon.
-  function Layout.footer()
-    local pick = Engine.RomText.plain("gText_PickOk"):match("{DPAD_UPDOWN}(%S+)")
-    local exit = Engine.RomText.plain("gText_AButtonExit"):match("{A_BUTTON}(%S+)")
-    if not (pick and exit) then error("the ROM's PICK and EXIT button hints are not as expected", 0) end
-    return ("{DPAD_UPDOWN} %s  {R_BUTTON} %s"):format(pick, exit)
-  end
 
   -- Each group's label and badges, placed: { { label, y, badges = { { type, x, y }, ... } }, ... }.
   local function matchupRows(groups)
@@ -72,22 +63,54 @@ return function(Engine)
     return misplaced
   end
 
-  local badgeImage, badgeQuads
+  local emeraldBadges, emeraldQuads
 
-  local function drawBadge(typeId, x, y)
-    if not badgeImage then
+  local function drawEmeraldBadge(typeId, x, y)
+    if not emeraldBadges then
       local summary = assert(Engine.Kit.manifest("rse/summary"), "the summary screen graphics are not in the cache")
-      badgeImage = assert(Engine.Kit.image(summary.moveTypes.png), "the move type badges are not in the cache")
-      badgeQuads = {}
+      emeraldBadges = assert(Engine.Kit.image(summary.moveTypes.png), "the move type badges are not in the cache")
+      emeraldQuads = {}
     end
-    badgeQuads[typeId] = badgeQuads[typeId]
-      or love.graphics.newQuad(0, typeId * BADGE_H, BADGE_W, BADGE_H, badgeImage:getDimensions())
+    emeraldQuads[typeId] = emeraldQuads[typeId]
+      or love.graphics.newQuad(0, typeId * BADGE_H, BADGE_W, BADGE_H, emeraldBadges:getDimensions())
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(badgeImage, badgeQuads[typeId], x, y)
+    love.graphics.draw(emeraldBadges, emeraldQuads[typeId], x, y)
+  end
+
+  local FIRERED_BADGE_H = 12
+
+  local function drawFireRedBadge(typeId, x, y)
+    Engine.SummaryChrome.drawTypeBadge(typeId, x, y + (BADGE_H - FIRERED_BADGE_H) / 2)
+  end
+
+  -- What differs between the games, by the engine's game family: Emerald
+  -- ("rse") or FireRed and LeafGreen ("frlg").  The button hints are the same
+  -- text under other names; the badges are each summary screen's own.
+  local GAMES = {
+    rse = { pickHint = "gText_PickOk", exitHint = "gText_AButtonExit", drawBadge = drawEmeraldBadge },
+    frlg = { pickHint = "gText_PickOK", exitHint = "gText_ABUTTONExit", drawBadge = drawFireRedBadge },
+  }
+
+  local function game()
+    local family = Engine.Profile.family()
+    return GAMES[family] or error(("game family %s is not supported"):format(tostring(family)), 0)
+  end
+
+  -- The footer joins the words of two of the game's button hints:
+  -- "{DPAD_UPDOWN}PICK {A_BUTTON}OK" and "{A_BUTTON}EXIT", the exit on R.  The
+  -- R icon is twice as wide as the A one the hints were drawn with, so a space
+  -- follows each icon.
+  function Layout.footer()
+    local hints = game()
+    local pick = Engine.RomText.plain(hints.pickHint):match("{DPAD_UPDOWN}(%S+)")
+    local exit = Engine.RomText.plain(hints.exitHint):match("{A_BUTTON}(%S+)")
+    if not (pick and exit) then error("the ROM's PICK and EXIT button hints are not as expected", 0) end
+    return ("{DPAD_UPDOWN} %s  {R_BUTTON} %s"):format(pick, exit)
   end
 
   -- openFrames, the frames the chart has been open, sets the arrows' bounce.
   function Layout.draw(page, index, count, openFrames, footer)
+    local drawBadge = game().drawBadge
     Window.stdFrame(HEADER_WINDOW)
     Window.stdFrame(MATCHUPS_WINDOW)
 

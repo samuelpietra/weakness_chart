@@ -1,8 +1,10 @@
--- Draws chart pages with the real engine modules and the imported ROM, and
--- checks every type combination a battler can have fits the window.
+-- Draws chart pages with the real engine modules and one game's imported ROM
+-- (WCH_GAME), and checks every type combination a battler can have fits the
+-- window.
 local MOD = os.getenv("WCH_MOD") .. "/"
 local ENGINE = os.getenv("WCH_ENGINE") .. "/"
-local EM = os.getenv("WCH_INSTALL") .. "/emerald/"
+local GAME = os.getenv("WCH_GAME")
+local ROM = os.getenv("WCH_INSTALL") .. "/" .. GAME .. "/"
 local OUT = os.getenv("WCH_WORK") .. "/"
 local function slurp(p) local f = io.open(p, "rb"); if not f then return nil end local s = f:read("*a"); f:close(); return s end
 
@@ -12,8 +14,8 @@ local function useCache()
   local CacheBlob = require("src.import.CacheBlob")
   local CacheFs = require("src.import.CacheFs")
   local function read(rel)
-    rel = rel:gsub("^red/", "")
-    for _, path in ipairs({ EM .. rel, EM .. "data/generated/gba/" .. rel }) do
+    rel = rel:gsub("^red/", ""):gsub("^" .. GAME .. "/", "")
+    for _, path in ipairs({ ROM .. rel, ROM .. "data/generated/gba/" .. rel }) do
       local bytes = slurp(path)
       if bytes then return CacheBlob.decode(rel, bytes) end
     end
@@ -23,14 +25,14 @@ local function useCache()
   local images = {}
   Kit.image = function(path)
     if images[path] == nil then
-      local bytes = slurp(EM .. path)
+      local bytes = slurp(ROM .. path)
       images[path] = bytes and love.graphics.newImage(love.image.newImageData(love.filesystem.newFileData(bytes, path))) or false
       if images[path] then images[path]:setFilter("nearest", "nearest") end
     end
     return images[path] or nil
   end
   Kit.loadLua = function(path)
-    local source = slurp(EM .. path)
+    local source = slurp(ROM .. path)
     return source and assert(load(source, "@" .. path, "t", {}))()
   end
 end
@@ -42,12 +44,15 @@ end
 function love.load()
   local ok, err = pcall(function()
     package.path = ENGINE .. "?.lua;" .. ENGINE .. "?/init.lua;" .. package.path
+    require("src.core.GameVersion").set(GAME)
     useCache()
     local Engine = {
       FrlgFont = require("src.ui.game3.frlg_font"),
       Kit = require("src.ui.game3.rse.scene_kit"),
       ListMenu = require("src.ui.game3.list_menu"),
+      Profile = require("src.core.game3.profile"),
       RomText = require("src.core.game3.rom_text"),
+      SummaryChrome = require("src.ui.game3.summary_chrome"),
       Types = require("src.core.game3.battle.types"),
       Window = require("src.ui.game3.window"),
     }
@@ -71,7 +76,7 @@ function love.load()
       if not seen[key] then seen[key] = true; combos[#combos + 1] = { t1, t2 ~= t1 and t2 or nil } end
     end
     for _, t in ipairs(Chart.ATTACKING_TYPES) do add(t) end
-    for _, pair in pairs(assert(loadstring(slurp(EM .. "data/generated/gba/pokemon/types.lua")))()) do add(pair[1], pair[2]) end
+    for _, pair in pairs(assert(loadstring(slurp(ROM .. "data/generated/gba/pokemon/types.lua")))()) do add(pair[1], pair[2]) end
     local misfits = {}
     for _, types in ipairs(combos) do
       for _, foresight in ipairs({ false, true }) do
@@ -121,20 +126,24 @@ function love.load()
     local w, h = small:getDimensions()
     local big = love.image.newImageData(w * 3, h * 3)
     big:mapPixel(function(x, y) return small:getPixel(math.floor(x / 3), math.floor(y / 3)) end)
-    local file = io.open(OUT .. "render.png", "wb"); file:write(big:encode("png"):getString()); file:close()
-    print("render.png: " .. #samples .. " pages")
+    local png = "render-" .. GAME .. ".png"
+    local file = io.open(OUT .. png, "wb"); file:write(big:encode("png"):getString()); file:close()
+    print(png .. ": " .. #samples .. " pages")
 
-    -- the entry on the real engine modules: both wraps in place, once
+    -- the entry on the real engine modules: every wrap in place, once
     local entry = assert(loadstring(slurp(MOD .. "main.lua"), "main.lua"))()
     local fakeMod = { path = "mods/weakness_chart", read = function(_, rel) return slurp(MOD .. rel) end,
       events = { on = function() end } }
     entry(fakeMod)
-    local Battle, Ui = require("src.core.game3.battle"), require("src.core.game3.battle.ui")
     local originals = "__weakness_chart_originals"
-    local drawWrapped = rawget(Battle, originals) and Battle.draw ~= Battle[originals].draw
-    local inputWrapped = rawget(Ui, originals) and Ui.handleInput ~= Ui[originals].handleInput
+    local function wrapped(path, name)
+      local module = require(path)
+      return rawget(module, originals) ~= nil and module[name] ~= module[originals][name]
+    end
+    local allWrapped = wrapped("src.core.game3.battle", "draw") and wrapped("src.core.game3.battle.ui", "handleInput")
+      and wrapped("src.ui.game3.help_system", "update")
     entry(fakeMod)
-    check(drawWrapped and inputWrapped, "Battle.draw and Ui.handleInput wrapped on the real engine")
+    check(allWrapped, "Battle.draw, Ui.handleInput and Help.update wrapped on the real engine")
     print(failures == 0 and "ALL PASS" or (failures .. " FAILED"))
   end)
   if not ok then print("FAIL " .. tostring(err)) end

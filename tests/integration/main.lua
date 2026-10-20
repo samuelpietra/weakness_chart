@@ -14,7 +14,9 @@ end
 
 -- ------- stand-ins
 
-local ROM = { gText_PickOk = "{DPAD_UPDOWN}PICK {A_BUTTON}OK", gText_AButtonExit = "{A_BUTTON}EXIT" }
+-- Emerald's button hints, and FireRed's under their names there
+local ROM = { gText_PickOk = "{DPAD_UPDOWN}PICK {A_BUTTON}OK", gText_AButtonExit = "{A_BUTTON}EXIT",
+  gText_PickOK = "{DPAD_UPDOWN}PICK {A_BUTTON}OK", gText_ABUTTONExit = "{A_BUTTON}EXIT" }
 local RomText = { plain = function(key) return ROM[key] or "" end,
   key = function(name, i) return name .. "[" .. i .. "]" end, lazy = function() return {} end }
 
@@ -44,9 +46,23 @@ local Kit = {
   image = function() return { getDimensions = function() return 32, 368 end } end,
 }
 love.graphics = { newQuad = function(_, y) return { y = y } end, setColor = function() end,
-  draw = function(_, quad) drawn.badges[#drawn.badges + 1] = quad.y / 16 end }
+  draw = function(_, quad, _, y) drawn.badges[#drawn.badges + 1] = quad.y / 16; drawn.badgeYs[#drawn.badgeYs + 1] = y end }
+local SummaryChrome = { drawTypeBadge = function(typeId, _, y)
+  drawn.badges[#drawn.badges + 1] = typeId; drawn.badgeYs[#drawn.badgeYs + 1] = y
+end }
+-- FireRed's Help System: L or R opens it, read before the battle's keys
+local Help = { opened = false, pack = false }
+function Help.isOpen() return Help.opened end
+function Help.update(game)
+  if Help.opened then return true end
+  if Help.pack and (game.input:wasPressed("l") or game.input:wasPressed("r")) then Help.opened = true; return true end
+  return false
+end
 
-local function resetDrawn() drawn = { texts = {}, frames = {}, badges = {} } end
+local family = "rse"
+local Profile = { family = function() return family end }
+
+local function resetDrawn() drawn = { texts = {}, frames = {}, badges = {}, badgeYs = {} } end
 
 local sounds = {}
 local SE = { SE_PC_LOGIN = 2, SE_PC_OFF = 3, SE_SELECT = 5 }
@@ -58,12 +74,14 @@ local events = {}
 local fakeMod = { path = "mods/weakness_chart", read = function(_, rel) return slurp(MOD .. rel) end,
   events = { on = function(_, name, fn) events[name] = fn end } }
 
--- a frame: the battle reads its keys, then draws
+-- a frame, as the engine runs one: the Help System reads the keys first and,
+-- when it takes them, the battle neither reads them nor is drawn
 local function frame(pressed)
   local input = { wasPressed = function(_, key) return key == pressed end }
+  resetDrawn()
+  if Help.update({ input = input }) then return true, false end
   local before = inputCalls
   local consumed = Ui.handleInput(input)
-  resetDrawn()
   Battle.draw()
   return consumed, inputCalls > before
 end
@@ -81,6 +99,7 @@ function love.load()
       ["src.ui.game3.frlg_font"] = Font, ["src.ui.game3.rse.scene_kit"] = Kit,
       ["src.ui.game3.list_menu"] = ListMenu, ["src.core.game3.battle.state"] = State,
       ["src.ui.game3.window"] = Window, ["src.core.game3.audio"] = Audio, ["src.core.game3.se_ids"] = SE,
+      ["src.core.game3.profile"] = Profile, ["src.ui.game3.help_system"] = Help, ["src.ui.game3.summary_chrome"] = SummaryChrome,
     }) do package.loaded[path] = module end
 
     local entry = assert(loadstring(slurp(MOD .. "main.lua"), "main.lua"))()
@@ -175,6 +194,10 @@ function love.load()
     consumed, reached = frame("r")
     check(reached and #drawn.frames == 0, "not while Wally catches")
     Ui._wally = nil
+    st.pokedude = true
+    consumed, reached = frame("r")
+    check(reached and #drawn.frames == 0, "not during the Pokédude's lessons")
+    st.pokedude = nil
 
     -- --- a double battle
     st = { battlersCount = 4, wild = true, absent = { [3] = true }, battlers = {
@@ -205,6 +228,37 @@ function love.load()
     frame("down")
     check(drawn.badges[1] == ID.WATER and drawn.badges[2] == ID.GROUND, "a Transformed battler shows the copied types")
     frame("r")
+
+    -- --- FireRed and LeafGreen: their own button hints and badges
+    family = "frlg"
+    ROM.gText_PickOk, ROM.gText_AButtonExit = "{DPAD_UPDOWN}??? {A_BUTTON}????", nil
+    st = { battlersCount = 2, absent = {}, battlers = {
+      [0] = battler("player", "CHARMANDER", 8, ID.FIRE),
+      [1] = battler("enemy", "ONIX", 14, ID.ROCK, ID.GROUND),
+    } }
+    frame("r")
+    check(texts():find("{DPAD_UPDOWN} PICK  {R_BUTTON} EXIT", 1, true), "FireRed: footer from its own PICK and EXIT")
+    check(drawn.badges[1] == ID.ROCK and drawn.badges[2] == ID.GROUND, "FireRed: badges from its summary screen")
+    check(drawn.badgeYs[1] == 10, "FireRed: a 12px badge sits in the middle of the 16px slot (header at y 8)")
+    frame("r")
+
+    Help.pack = true
+    frame("r")
+    check(not Help.opened and #drawn.frames == 2, "FireRed: R in a command screen opens the chart, not the help")
+    frame("l")
+    check(not Help.opened and #drawn.frames == 2, "FireRed: L over the open chart does not open the help")
+    frame("r")
+    check(not Help.opened and #drawn.frames == 0, "FireRed: R closes the chart without opening the help")
+    frame("l")
+    check(Help.opened, "FireRed: L in a command screen still opens the help")
+    Help.opened = false
+    Ui._mode = "selmsg"
+    frame("r")
+    check(Help.opened, "FireRed: R outside the command screens still opens the help")
+    Help.opened, Help.pack = false, false
+    Ui._mode = "menu"
+    family = "rse"
+    ROM.gText_PickOk, ROM.gText_AButtonExit = "{DPAD_UPDOWN}PICK {A_BUTTON}OK", "{A_BUTTON}EXIT"
 
     -- --- a failure closes the chart instead of stopping the battle
     fontBroken = true

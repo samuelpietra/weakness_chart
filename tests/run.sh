@@ -3,8 +3,9 @@
 # (mods/weakness_chart/tests -> the install is three levels up).
 #
 #   lint         every global a mod file touches; a misspelt local shows here
-#   render       draws chart pages with the real engine into render.png, and
-#                checks every type combination of the game fits the window
+#   render       for each supported game with an imported ROM: draws chart
+#                pages with the real engine into render-<game>.png, and checks
+#                every type combination of the game fits the window
 #   integration  the battle paths on stand-ins for the wrapped engine modules
 #
 # The engine is read from the newest update payload, and the tests run on a
@@ -33,12 +34,24 @@ if [ ! -x "$WORK/love.app/Contents/MacOS/love" ]; then
 fi
 
 export WCH_MOD="$MOD" WCH_INSTALL="$INSTALL" WCH_ENGINE="$WORK/engine" WCH_WORK="$WORK"
-for test in lint render integration; do
-  echo "== $test"
-  "$WORK/love.app/Contents/MacOS/love" "$TESTS/$test" > "$WORK/$test.log" 2>&1 &
+run() { # test, log name
+  "$WORK/love.app/Contents/MacOS/love" "$TESTS/$1" > "$WORK/$2.log" 2>&1 &
   pid=$!
   waited=0
   while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 60 ]; do sleep 1; waited=$((waited + 1)); done
   kill "$pid" 2>/dev/null || true
-  cat "$WORK/$test.log"
+  cat "$WORK/$2.log"
+}
+
+echo "== lint"
+run lint lint
+for game in emerald firered leafgreen; do
+  if [ -d "$INSTALL/$game/data/generated/gba" ]; then
+    echo "== render ($game)"
+    WCH_GAME=$game run render "render-$game"
+  else
+    echo "== render ($game): no imported ROM, skipped"
+  fi
 done
+echo "== integration"
+run integration integration

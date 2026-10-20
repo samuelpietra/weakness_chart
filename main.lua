@@ -10,22 +10,28 @@
 --
 -- The chart is drawn after the battle (Battle.draw), and its keys are read
 -- where the battle reads its command keys (Ui.handleInput), none of which is R.
+-- In FireRed and LeafGreen, L and R also open the Help System, which reads
+-- them first (Help.update); in the command screens R is left to the chart,
+-- and L still opens the help, except over the open chart.
 
 return function(mod)
   local MOD_ID = "weakness_chart"
 
   local ENGINE = {
-    Audio    = "src.core.game3.audio",
-    Battle   = "src.core.game3.battle",
-    BattleUi = "src.core.game3.battle.ui",
-    FrlgFont = "src.ui.game3.frlg_font",
-    Kit      = "src.ui.game3.rse.scene_kit",
-    ListMenu = "src.ui.game3.list_menu",
-    RomText  = "src.core.game3.rom_text",
-    SeIds    = "src.core.game3.se_ids",
-    State    = "src.core.game3.battle.state",
-    Types    = "src.core.game3.battle.types",
-    Window   = "src.ui.game3.window",
+    Audio         = "src.core.game3.audio",
+    Battle        = "src.core.game3.battle",
+    BattleUi      = "src.core.game3.battle.ui",
+    FrlgFont      = "src.ui.game3.frlg_font",
+    Help          = "src.ui.game3.help_system",
+    Kit           = "src.ui.game3.rse.scene_kit",
+    ListMenu      = "src.ui.game3.list_menu",
+    Profile       = "src.core.game3.profile",
+    RomText       = "src.core.game3.rom_text",
+    SeIds         = "src.core.game3.se_ids",
+    State         = "src.core.game3.battle.state",
+    SummaryChrome = "src.ui.game3.summary_chrome",
+    Types         = "src.core.game3.battle.types",
+    Window        = "src.ui.game3.window",
   }
 
   local function log(fmt, ...)
@@ -38,8 +44,8 @@ return function(mod)
   end
 
   -- Every engine piece the chart needs, or the names of those missing.  The
-  -- two wraps go in together or not at all: a chart that takes the keys but
-  -- is never drawn would leave the battle stuck behind nothing.
+  -- wraps go in together or not at all: a chart that takes the keys but is
+  -- never drawn would leave the battle stuck behind nothing.
   local function resolveEngine()
     local Engine, missing = {}, {}
     for name, path in pairs(ENGINE) do
@@ -48,7 +54,7 @@ return function(mod)
     end
     if #missing == 0 then
       for _, fn in ipairs({ { "Battle", "draw" }, { "Battle", "getState" }, { "BattleUi", "handleInput" },
-        { "Types", "typeCalc" } }) do
+        { "Help", "isOpen" }, { "Help", "update" }, { "Profile", "family" }, { "SummaryChrome", "drawTypeBadge" }, { "Types", "typeCalc" } }) do
         if type(Engine[fn[1]][fn[2]]) ~= "function" then missing[#missing + 1] = fn[1] .. "." .. fn[2] end
       end
     end
@@ -73,14 +79,15 @@ return function(mod)
   local Chart = libChunk("chart")
   local Layout = libChunk("layout")
 
-  local Battle, Ui = Engine.Battle, Engine.BattleUi
+  local Battle, Ui, Help = Engine.Battle, Engine.BattleUi, Engine.Help
 
   local COMMAND_SCREENS = { menu = true, moves = true, target = true }
 
-  -- Not while the game itself plays a battle out: the old man's and Wally's catching tutorials.
+  -- Not while the game itself plays a battle out: the old man's and Wally's
+  -- catching tutorials, and the Pokédude's lessons.
   local function choosingCommand()
     local st = Battle.getState()
-    return st ~= nil and COMMAND_SCREENS[Ui._mode] and not st.oldManTutorial and not Ui._wally
+    return st ~= nil and COMMAND_SCREENS[Ui._mode] and not st.oldManTutorial and not st.pokedude and not Ui._wally
   end
 
   -- { pages, index, openFrames, footer } while the chart is open.
@@ -167,6 +174,16 @@ return function(mod)
     return function(...)
       original(...)
       if openChart() then guarded("drawing", draw) end
+    end
+  end)
+
+  wrap(Help, "update", function(original)
+    return function(game, ...)
+      local input = game and game.input
+      if input and not Help.isOpen() and (openChart() or (input:wasPressed("r") and choosingCommand())) then
+        return false
+      end
+      return original(game, ...)
     end
   end)
 

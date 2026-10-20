@@ -1,6 +1,6 @@
 # Weakness Chart
 
-A gen1recomp mod for Pokémon Emerald. In a battle, press **R** while choosing a
+A gen1recomp mod for Pokémon Emerald, FireRed and LeafGreen. In a battle, press **R** while choosing a
 command to open a chart of every Pokémon on the field:
 
 - its name, level and types, in a header window;
@@ -22,13 +22,14 @@ now, and after Foresight a Ghost no longer lists Normal and Fighting as 0×.
 Everything on screen comes from **your own imported ROM**: the window frame you
 chose in OPTIONS, the text font, the summary screen's type badges, the list
 menu's scroll arrows, and the footer's button hints, which join the words of
-two of the game's own ("✥PICK ⒶOK" and "ⒶEXIT").
+two of the game's own ("✥PICK ⒶOK" and "ⒶEXIT"). Each game draws with its own
+pieces, so the chart in FireRed has FireRed's font and its smaller badges.
 
 ## Requirements
 
 | | |
 |---|---|
-| Game | Pokémon Emerald |
+| Game | Pokémon Emerald, FireRed or LeafGreen (played on Emerald and FireRed; LeafGreen shares FireRed's code and is untested) |
 | Engine | gen1recomp 0.3.85 or newer (the version it was validated on) |
 | Mod API | 2 |
 | Permissions | `engine_internals` |
@@ -56,7 +57,7 @@ gen1recomp/
 1. Copy the `weakness_chart` folder into `mods/`, keeping the folder name.
 2. Start gen1recomp and open the Mod Manager.
 3. Enable **Weakness Chart** and accept the `engine_internals` prompt.
-4. Load an Emerald save.
+4. Load an Emerald, FireRed or LeafGreen save.
 
 Mods are loaded when gen1recomp starts. After enabling or disabling the mod,
 quit the game and start it again from gen1recomp; going back to the title
@@ -66,8 +67,14 @@ screen is not enough.
 
 The chart opens over the action menu (FIGHT, BAG, POKéMON, RUN), the move list
 and the choice of a target in a double battle. Elsewhere — while a message
-runs, in the bag or the party screen — R does what it did before, which in an
-Emerald battle is nothing. The chart opens on the first foe.
+runs, in the bag or the party screen — R does what it did before, which in a
+battle is nothing. It stays shut while the game plays a battle for you: the old
+man's and Wally's catching tutorials, and the Pokédude's lessons. The chart
+opens on the first foe.
+
+In FireRed and LeafGreen, L and R open the Help System when OPTIONS has the
+button mode on HELP. In the command screens R opens the chart instead; L still
+opens the help there, unless the chart is open, and R does everywhere else.
 
 R is the game's R button: on a keyboard, E or right Ctrl unless you changed the
 controls. On a gamepad, gen1recomp leaves the shoulder buttons out of gameplay
@@ -125,5 +132,5 @@ Keep `manifest.json`'s `version` field in step with the tag.
 |---|---|
 | `main.lua` | Wiring: the engine hooks, when R opens and closes the chart, the pages. |
 | `lib/chart.lua` | What a page says: the battler's name, level and types, and its matchups, from the engine's own damage calculation. |
-| `lib/layout.lua` | Where everything goes on screen, and the drawing. |
+| `lib/layout.lua` | Where everything goes on screen, and the drawing; the pieces that differ between Emerald and FireRed/LeafGreen. |
 | `tests/` | Offline tests, run with `tests/run.sh` (see `tests/README.md`). |
