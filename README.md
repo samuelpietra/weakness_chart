@@ -115,6 +115,13 @@ is running.
 
 Keep `manifest.json`'s `version` field in step with the tag.
 
+### Packaging
+
+`./package.sh` writes the install zip of the release `manifest.json` names to
+`~/Desktop/weakness_chart-v<version>.zip`: the files of its tag, in a
+`weakness_chart` folder, without the tests and tooling (`.gitattributes` marks
+them `export-ignore`). It stops if that version has no tag yet.
+
 ### Code
 
 - English only, in comments as well as identifiers.
