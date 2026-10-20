@@ -104,5 +104,8 @@ Commit only when the maintainer says so, usually after playing the build.
 - Update the README in the same commit when behaviour, requirements or
   layout change.
 - `./package.sh` writes the install zip of the tagged release to
-  `~/Desktop/weakness_chart-v<version>.zip`, leaving out what
+  `~/Desktop/weakness_chart-<version>.zip`, leaving out what
   `.gitattributes` marks `export-ignore` (tests and tooling).
+- Players get updates from GitHub releases (`github` in the manifest): a
+  release of tag `v<version>` with that zip attached. A push alone updates no
+  one.

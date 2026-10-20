@@ -63,6 +63,13 @@ Mods are loaded when gen1recomp starts. After enabling or disabling the mod,
 quit the game and start it again from gen1recomp; going back to the title
 screen is not enough.
 
+## Updating
+
+The manifest names this repository (`github`), so gen1recomp's Mod Manager
+checks its [releases](https://github.com/samuelpietra/weakness_chart/releases)
+and offers a newer one with an **Update** button; **Check for updates** asks
+again right away instead of waiting for the six-hour cache.
+
 ## Using it
 
 The chart opens over the action menu (FIGHT, BAG, POKéMON, RUN), the move list
@@ -115,10 +122,13 @@ is running.
 
 Keep `manifest.json`'s `version` field in step with the tag.
 
+A release players can update to is a GitHub release of that tag with the zip
+from `package.sh` attached; pushing a commit updates no one.
+
 ### Packaging
 
 `./package.sh` writes the install zip of the release `manifest.json` names to
-`~/Desktop/weakness_chart-v<version>.zip`: the files of its tag, in a
+`~/Desktop/weakness_chart-<version>.zip`: the files of its tag, in a
 `weakness_chart` folder, without the tests and tooling (`.gitattributes` marks
 them `export-ignore`). It stops if that version has no tag yet.
 
