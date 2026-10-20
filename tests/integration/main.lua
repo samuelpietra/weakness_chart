@@ -84,6 +84,14 @@ function love.load()
     }) do package.loaded[path] = module end
 
     local entry = assert(loadstring(slurp(MOD .. "main.lua"), "main.lua"))()
+
+    -- an engine without Battle.draw: the keys must not be taken either
+    local engineHandleInput, engineDraw = Ui.handleInput, Battle.draw
+    Battle.draw = nil
+    entry(fakeMod)
+    check(Ui.handleInput == engineHandleInput, "an engine lacking Battle.draw keeps its own key handling")
+    Battle.draw = engineDraw
+
     entry(fakeMod)
     entry(fakeMod) -- a hot reload wraps the engine's functions, not the mod's
 

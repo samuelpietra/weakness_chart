@@ -2,51 +2,62 @@
 --
 -- In a battle, while the game waits for a command (the action menu, the move
 -- list or the target choice), R opens a chart of the battlers on the field,
--- one page each, foes first: name, level and types, and every attacking type
--- that deals 4x, 2x, 1/2x, 1/4x or no damage to it (lib/chart.lua).  Up and
--- down turn the pages; R closes it.  While it is open, the battle gets no
--- input.  It sounds like the PC's storage screens do, which the Pokédex's
--- entry pages share: SE_PC_LOGIN opening, SE_SELECT turning a page,
+-- one page each (lib/chart.lua), in the game's own windows (lib/layout.lua).
+-- Up and down turn the pages; R closes it.  While it is open, the battle
+-- gets no input.  It sounds like the PC's storage screens, which the
+-- Pokédex's entry pages share: SE_PC_LOGIN opening, SE_SELECT turning a page,
 -- SE_PC_OFF closing.
 --
--- The window is the game's own (lib/layout.lua), drawn over the battle after
--- the engine has drawn it (Battle.draw).  The keys are read where the battle
--- reads its command keys (Ui.handleInput), which neither L nor R is used in.
+-- The chart is drawn after the battle (Battle.draw), and its keys are read
+-- where the battle reads its command keys (Ui.handleInput), none of which is R.
 
 return function(mod)
   local MOD_ID = "weakness_chart"
 
   local ENGINE = {
-    Audio     = "src.core.game3.audio",
-    Battle    = "src.core.game3.battle",
-    BattleUi  = "src.core.game3.battle.ui",
-    FrlgFont  = "src.ui.game3.frlg_font",
-    Kit       = "src.ui.game3.rse.scene_kit",
-    ListMenu  = "src.ui.game3.list_menu",
-    RomText   = "src.core.game3.rom_text",
-    SE        = "src.core.game3.se_ids",
-    State     = "src.core.game3.battle.state",
-    Types     = "src.core.game3.battle.types",
-    Window    = "src.ui.game3.window",
+    Audio    = "src.core.game3.audio",
+    Battle   = "src.core.game3.battle",
+    BattleUi = "src.core.game3.battle.ui",
+    FrlgFont = "src.ui.game3.frlg_font",
+    Kit      = "src.ui.game3.rse.scene_kit",
+    ListMenu = "src.ui.game3.list_menu",
+    RomText  = "src.core.game3.rom_text",
+    SeIds    = "src.core.game3.se_ids",
+    State    = "src.core.game3.battle.state",
+    Types    = "src.core.game3.battle.types",
+    Window   = "src.ui.game3.window",
   }
-
-  local function engineModule(path)
-    local loaded, module = pcall(require, path)
-    if not loaded or type(module) ~= "table" then return nil end
-    return module
-  end
 
   local function log(fmt, ...)
     print(("[%s] " .. fmt):format(MOD_ID, ...))
   end
 
-  local Engine, missing = {}, {}
-  for name, path in pairs(ENGINE) do
-    Engine[name] = engineModule(path)
-    if not Engine[name] then missing[#missing + 1] = path end
+  local function engineModule(path)
+    local loaded, module = pcall(require, path)
+    if loaded and type(module) == "table" then return module end
   end
-  if #missing > 0 then
+
+  -- Every engine piece the chart needs, or the names of those missing.  The
+  -- two wraps go in together or not at all: a chart that takes the keys but
+  -- is never drawn would leave the battle stuck behind nothing.
+  local function resolveEngine()
+    local Engine, missing = {}, {}
+    for name, path in pairs(ENGINE) do
+      Engine[name] = engineModule(path)
+      if not Engine[name] then missing[#missing + 1] = path end
+    end
+    if #missing == 0 then
+      for _, fn in ipairs({ { "Battle", "draw" }, { "Battle", "getState" }, { "BattleUi", "handleInput" },
+        { "Types", "typeCalc" } }) do
+        if type(Engine[fn[1]][fn[2]]) ~= "function" then missing[#missing + 1] = fn[1] .. "." .. fn[2] end
+      end
+    end
     table.sort(missing)
+    return Engine, missing
+  end
+
+  local Engine, missing = resolveEngine()
+  if #missing > 0 then
     log("this engine version lacks %s; the chart is off", table.concat(missing, ", "))
     return
   end
@@ -64,32 +75,38 @@ return function(mod)
 
   local Battle, Ui = Engine.Battle, Engine.BattleUi
 
-  -- The command screens the chart opens over.
-  local COMMAND_MODES = { menu = true, moves = true, target = true }
+  local COMMAND_SCREENS = { menu = true, moves = true, target = true }
 
+  -- Not while the game itself plays a battle out: the old man's and Wally's catching tutorials.
   local function choosingCommand()
     local st = Battle.getState()
-    return st ~= nil and COMMAND_MODES[Ui._mode] and not st.oldManTutorial and not Ui._wally
+    return st ~= nil and COMMAND_SCREENS[Ui._mode] and not st.oldManTutorial and not Ui._wally
   end
 
-  -- { pages, index, frame, footer } while the chart is open.
+  -- { pages, index, openFrames, footer } while the chart is open.
   local chart = nil
 
+  -- The chart, unless the command screen it was opened over is gone.
+  local function openChart()
+    if chart and not choosingCommand() then chart = nil end
+    return chart
+  end
+
   local function playSe(name)
-    Engine.Audio.playSe(assert(Engine.SE[name], name))
+    Engine.Audio.playSe(assert(Engine.SeIds[name], name))
   end
 
   local function open()
     local pages = Chart.pages(Battle.getState())
     if #pages == 0 then return false end
-    chart = { pages = pages, index = 1, frame = 0, footer = Layout.footer() }
+    chart = { pages = pages, index = 1, openFrames = 0, footer = Layout.footer() }
     playSe("SE_PC_LOGIN")
     return true
   end
 
   -- At the first or last page the page stays, silently, as a list's cursor does.
-  local function turnPage(input)
-    chart.frame = chart.frame + 1
+  local function handleKeys(input)
+    chart.openFrames = chart.openFrames + 1
     if input:wasPressed("r") then
       chart = nil
       playSe("SE_PC_OFF")
@@ -103,6 +120,20 @@ return function(mod)
     end
   end
 
+  local function draw()
+    Layout.draw(chart.pages[chart.index], chart.index, #chart.pages, chart.openFrames, chart.footer)
+  end
+
+  -- An error in the chart closes it and is logged, instead of stopping the battle.
+  local function guarded(what, fn)
+    local done, result = pcall(fn)
+    if not done then
+      chart = nil
+      log("chart closed: %s failed: %s", what, tostring(result))
+    end
+    return done and result
+  end
+
   -- ------- engine wraps
   --
   -- Each original is kept on the engine module under ORIGINALS, so loading
@@ -111,10 +142,6 @@ return function(mod)
   local ORIGINALS = "__" .. MOD_ID .. "_originals"
 
   local function wrap(module, name, make)
-    if type(module[name]) ~= "function" then
-      log("this engine version lacks %s; the chart is off", name)
-      return false
-    end
     local saved = rawget(module, ORIGINALS)
     if not saved then
       saved = {}
@@ -122,34 +149,16 @@ return function(mod)
     end
     saved[name] = saved[name] or module[name]
     module[name] = make(saved[name])
-    return true
-  end
-
-  -- An error in the chart closes it and is logged, instead of stopping the battle.
-  local function guarded(what, fn, ...)
-    local done, err = pcall(fn, ...)
-    if not done then
-      chart = nil
-      log("chart closed: %s failed: %s", what, tostring(err))
-    end
-    return done and err
-  end
-
-  if not (type(Battle.getState) == "function" and type(Engine.Types.typeCalc) == "function") then
-    log("this engine version lacks Battle.getState or Types.typeCalc; the chart is off")
-    return
   end
 
   wrap(Ui, "handleInput", function(original)
     return function(input, ...)
-      if chart and not choosingCommand() then chart = nil end
-      if chart then
-        guarded("turning a page", turnPage, input)
+      if not input then return original(input, ...) end
+      if openChart() then
+        guarded("reading the keys", function() handleKeys(input) end)
         return true
       end
-      if input and input:wasPressed("r") and choosingCommand() and guarded("opening", open) then
-        return true
-      end
+      if input:wasPressed("r") and choosingCommand() and guarded("opening", open) then return true end
       return original(input, ...)
     end
   end)
@@ -157,13 +166,11 @@ return function(mod)
   wrap(Battle, "draw", function(original)
     return function(...)
       original(...)
-      if chart and not choosingCommand() then chart = nil end
-      if chart then
-        guarded("drawing", Layout.draw, chart.pages[chart.index], chart.index, #chart.pages, chart.frame, chart.footer)
-      end
+      if openChart() then guarded("drawing", draw) end
     end
   end)
 
-  mod.events:on("battle.started", function() chart = nil end)
-  mod.events:on("battle.ended", function() chart = nil end)
+  local function close() chart = nil end
+  mod.events:on("battle.started", close)
+  mod.events:on("battle.ended", close)
 end

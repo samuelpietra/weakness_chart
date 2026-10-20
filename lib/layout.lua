@@ -1,18 +1,20 @@
 -- The chart window, drawn over the battle with the game's own pieces: the
--- standard window frame of the player's choice (Window.stdFrame), the text
--- font (FrlgFont), the summary screen's move type badges and the list menu's
--- scroll arrows.  A header window names the battler, with its level and
--- types; the window below lists its matchups, one group per row, five badges
--- to a row, over a footer naming the buttons.
+-- window frame the player chose in OPTIONS, the text font, the summary
+-- screen's move type badges and the list menu's scroll arrows.  A header
+-- window names the battler, with its level and types; the window below lists
+-- its matchups, one group per row, five badges to a row, over a footer naming
+-- the buttons.
 --
--- Positions are pixels of the 240x160 screen, windows in 8px tiles.
+-- Positions are pixels of the 240x160 screen, windows are in 8px tiles.
 
 return function(Engine)
+  local Font, Window = Engine.FrlgFont, Engine.Window
   local Layout = {}
 
-  local HEADER = { left = 1, top = 1, w = 28, h = 2 }
-  local BODY = { left = 1, top = 5, w = 28, h = 14 }
-  Layout.HEADER, Layout.BODY = HEADER, BODY
+  local TILE = 8
+  local HEADER_WINDOW = { left = 1, top = 1, w = 28, h = 2 }
+  local MATCHUPS_WINDOW = { left = 1, top = 5, w = 28, h = 14 }
+  local MATCHUPS_BOTTOM = (MATCHUPS_WINDOW.top + MATCHUPS_WINDOW.h) * TILE
 
   local TEXT_X = 10
   local RIGHT = 230
@@ -24,11 +26,10 @@ return function(Engine)
   local BADGES_PER_ROW = 5
   local BADGES_X = 48
   local ROWS_Y = 45
-  local ROW_PITCH = 17
+  local ROW_STEP = 17
+  -- The tightest gap that keeps six rows (Steel/Rock, Electric/Steel) in the window.
   local GROUP_GAP = 1
   local FOOTER_Y = 136
-  Layout.BADGE_W, Layout.BADGE_H, Layout.RIGHT, Layout.FOOTER_Y = BADGE_W, BADGE_H, RIGHT, FOOTER_Y
-  Layout.BODY_BOTTOM = (BODY.top + BODY.h) * 8
 
   -- The footer joins the words of two of the game's button hints:
   -- gText_PickOk ("{DPAD_UPDOWN}PICK {A_BUTTON}OK") and gText_AButtonExit
@@ -41,62 +42,68 @@ return function(Engine)
     return ("{DPAD_UPDOWN} %s  {R_BUTTON} %s"):format(pick, exit)
   end
 
-  -- Where each group's label and badges go:
-  -- { { label, y, badges = { { type, x, y }, ... } }, ... }.
-  function Layout.rows(page)
+  -- Each group's label and badges, placed: { { label, y, badges = { { type, x, y }, ... } }, ... }.
+  local function matchupRows(groups)
     local rows, y = {}, ROWS_Y
-    for _, group in ipairs(page.groups) do
+    for _, group in ipairs(groups) do
       local row = { label = group.label, y = y, badges = {} }
       for i, typeId in ipairs(group.types) do
         local column, line = (i - 1) % BADGES_PER_ROW, math.floor((i - 1) / BADGES_PER_ROW)
-        row.badges[i] = { type = typeId, x = BADGES_X + column * BADGE_STEP, y = y + line * ROW_PITCH }
+        row.badges[i] = { type = typeId, x = BADGES_X + column * BADGE_STEP, y = y + line * ROW_STEP }
       end
       rows[#rows + 1] = row
-      y = y + ROW_PITCH * math.ceil(#group.types / BADGES_PER_ROW) + GROUP_GAP
+      y = y + ROW_STEP * math.ceil(#group.types / BADGES_PER_ROW) + GROUP_GAP
     end
     return rows
+  end
+
+  -- How many badges of these groups would leave the window or run into the footer.
+  function Layout.misplacedBadges(groups, footer)
+    local footerLeft = RIGHT - Font.measure(footer)
+    local misplaced = 0
+    for _, row in ipairs(matchupRows(groups)) do
+      for _, badge in ipairs(row.badges) do
+        local right, bottom = badge.x + BADGE_W, badge.y + BADGE_H
+        if right > RIGHT or bottom > MATCHUPS_BOTTOM or (bottom > FOOTER_Y and right > footerLeft) then
+          misplaced = misplaced + 1
+        end
+      end
+    end
+    return misplaced
   end
 
   local badgeImage, badgeQuads
 
   local function drawBadge(typeId, x, y)
     if not badgeImage then
-      local entry = assert(Engine.Kit.manifest("rse/summary"), "the summary screen graphics are not in the cache").moveTypes
-      badgeImage = assert(entry and Engine.Kit.image(entry.png), "the move type badges are not in the cache")
+      local summary = assert(Engine.Kit.manifest("rse/summary"), "the summary screen graphics are not in the cache")
+      badgeImage = assert(Engine.Kit.image(summary.moveTypes.png), "the move type badges are not in the cache")
       badgeQuads = {}
     end
-    local quad = badgeQuads[typeId]
-    if not quad then
-      quad = love.graphics.newQuad(0, typeId * BADGE_H, BADGE_W, BADGE_H, badgeImage:getDimensions())
-      badgeQuads[typeId] = quad
-    end
+    badgeQuads[typeId] = badgeQuads[typeId]
+      or love.graphics.newQuad(0, typeId * BADGE_H, BADGE_W, BADGE_H, badgeImage:getDimensions())
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(badgeImage, quad, x, y)
+    love.graphics.draw(badgeImage, badgeQuads[typeId], x, y)
   end
 
-  -- frame counts the frames the chart has been open, for the arrows' bounce.
-  function Layout.draw(page, index, count, frame, footer)
-    local Font = Engine.FrlgFont
-    Engine.Window.stdFrame(HEADER)
-    Engine.Window.stdFrame(BODY)
+  -- openFrames, the frames the chart has been open, sets the arrows' bounce.
+  function Layout.draw(page, index, count, openFrames, footer)
+    Window.stdFrame(HEADER_WINDOW)
+    Window.stdFrame(MATCHUPS_WINDOW)
 
     Font.draw(page.name, TEXT_X, HEADER_Y)
-    if page.level then Font.draw("{LV}" .. page.level, TEXT_X + Font.measure(page.name) + LEVEL_GAP, HEADER_Y) end
-    local type1, type2 = page.types[1], page.types[2]
-    if type2 then
-      drawBadge(type1, RIGHT - BADGE_W - BADGE_STEP, HEADER_Y)
-      drawBadge(type2, RIGHT - BADGE_W, HEADER_Y)
-    else
-      drawBadge(type1, RIGHT - BADGE_W, HEADER_Y)
+    Font.draw("{LV}" .. page.level, TEXT_X + Font.measure(page.name) + LEVEL_GAP, HEADER_Y)
+    for i, typeId in ipairs(page.types) do
+      drawBadge(typeId, RIGHT - BADGE_W - (#page.types - i) * BADGE_STEP, HEADER_Y)
     end
 
-    for _, row in ipairs(Layout.rows(page)) do
+    for _, row in ipairs(matchupRows(page.groups)) do
       Font.draw(row.label, TEXT_X, row.y)
       for _, badge in ipairs(row.badges) do drawBadge(badge.type, badge.x, badge.y) end
     end
 
     Font.draw(footer, RIGHT - Font.measure(footer), FOOTER_Y)
-    Engine.ListMenu.drawScrollArrows(BODY, index > 1, index < count, frame)
+    Engine.ListMenu.drawScrollArrows(MATCHUPS_WINDOW, index > 1, index < count, openFrames)
   end
 
   return Layout
