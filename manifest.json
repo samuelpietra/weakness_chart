@@ -1,0 +1,22 @@
+{
+  "id": "weakness_chart",
+  "name": "Weakness Chart",
+  "version": "0.1.0",
+  "api": 2,
+  "entry": "main.lua",
+  "profile": "content",
+  "category": "QOL",
+  "game_version": ">=0.3.85 <2.0.0",
+  "games": [
+    "emerald"
+  ],
+  "priority": 80,
+  "dependencies": [],
+  "optional_dependencies": [],
+  "conflicts": [],
+  "permissions": [
+    "engine_internals"
+  ],
+  "affects_link": false,
+  "description": "Press R while choosing a command in battle to open a chart of every Pokemon on the field: its types, and which attacking types hit it for 4x, 2x, 1/2x, 1/4x or no damage. Up and down go through the Pokemon, foes first; R closes it. Drawn with the game's own windows, type badges and text."
+}
