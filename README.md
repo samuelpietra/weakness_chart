@@ -128,7 +128,7 @@ does both checks and the publishing:
 
 | Workflow | When | What |
 |---|---|---|
-| `ci.yml` | every push to `main` and pull request | `tests/ci.sh` (lint and integration); every pushed commit raises the version and carries its tag |
+| `ci.yml` | every push to `main` and pull request | `tests/ci.sh` (lint, engine and integration); every pushed commit raises the version and carries its tag |
 | `release.yml` | a pushed tag `v*` | the tests again, then a GitHub release of the tag with the zip attached and the commit message as its notes |
 
 Push commits with their tags: `git push --follow-tags`. GitHub sends no tag

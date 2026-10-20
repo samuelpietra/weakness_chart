@@ -84,9 +84,10 @@ cannot tell where the game ends and the mod begins.
 Run `tests/run.sh` (see `tests/README.md`) and read every result. `render`
 runs once per imported game and checks every type combination fits the
 window; a layout change must keep it passing in each game. A fix comes with
-a test that fails before it and passes after. Look at `render-<game>.png`
-after any visual change. Then hand the build over for an in-game test in each
-supported game the change touches, naming the cases to try.
+a test that fails before it and passes after; a new engine call gets its
+entry in `engine`'s `CALLED`. Look at `render-<game>.png` after any visual
+change. Then hand the build over for an in-game test in each supported game
+the change touches, naming the cases to try.
 
 ## Releasing
 

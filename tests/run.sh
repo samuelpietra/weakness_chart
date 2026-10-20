@@ -3,6 +3,8 @@
 # (mods/weakness_chart/tests -> the install is three levels up).
 #
 #   lint         every global a mod file touches; a misspelt local shows here
+#   engine       the engine modules, functions, sounds, type chart and
+#                source the mod relies on, and its wraps on the real modules
 #   render       for each supported game with an imported ROM: draws chart
 #                pages with the real engine into render-<game>.png, and checks
 #                every type combination of the game fits the window
@@ -45,6 +47,8 @@ run() { # test, log name
 
 echo "== lint"
 run lint lint
+echo "== engine"
+run engine engine
 for game in emerald firered leafgreen; do
   if [ -d "$INSTALL/$game/data/generated/gba" ]; then
     echo "== render ($game)"

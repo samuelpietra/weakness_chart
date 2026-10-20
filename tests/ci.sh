@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs the offline tests that need no ROM — lint and integration — on Linux,
+# Runs the offline tests that need no ROM — lint, engine and integration — on Linux,
 # as GitHub Actions does: LÖVE from the system (apt), the engine from
 # gen1recomp's release of the version this mod was validated on.  render needs
 # an imported ROM, which never leaves the player's machine; it runs locally
@@ -20,12 +20,13 @@ fi
 
 export WCH_MOD="$MOD" WCH_ENGINE="$WORK/engine" WCH_WORK="$WORK"
 failed=0
-for test in lint integration; do
+for test in lint engine integration; do
   echo "== $test"
   love "$TESTS/$test" > "$WORK/$test.log" 2>&1 || true
   cat "$WORK/$test.log"
 done
 grep -q -e UNEXPECTED -e "COMPILE ERROR" "$WORK/lint.log" && failed=1
 [ "$(grep -c '	ok$' "$WORK/lint.log")" -eq 3 ] || failed=1
+grep -qx "ALL PASS" "$WORK/engine.log" || failed=1
 grep -qx "ALL PASS" "$WORK/integration.log" || failed=1
 exit "$failed"
